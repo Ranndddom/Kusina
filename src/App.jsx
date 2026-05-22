@@ -74,7 +74,6 @@ const injectStyles = () => {
   `;
   document.head.appendChild(style);
 
-  // Load HTML5 QR Code library
   if (!document.getElementById('html5-qrcode-script')) {
     const qrScript = document.createElement('script');
     qrScript.id = 'html5-qrcode-script';
@@ -112,19 +111,16 @@ export default function App() {
   const [dictionary, setDictionary] = useState({});
   
   // UI States
-  const [scannerMode, setScannerMode] = useState(null); // 'restock' | 'deplete' | null
+  const [scannerMode, setScannerMode] = useState(null); 
   const [scanning, setScanning] = useState(false);
+  const [searchingBarcode, setSearchingBarcode] = useState(false);
   
-  // Navigation & Dropdown trigger state
   const [showNavActionDropdown, setShowNavActionDropdown] = useState(false);
-  
-  // Modals & Form Handlers
   const [itemForm, setItemForm] = useState(null);
   const [aiRecipe, setAiRecipe] = useState("");
   const [showRecipeModal, setShowRecipeModal] = useState(false);
   const [loadingRecipe, setLoadingRecipe] = useState(false);
   
-  // Filtering states
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("All");
   const [toastMessage, setToastMessage] = useState("");
@@ -132,21 +128,12 @@ export default function App() {
 
   const dropdownRef = useRef(null);
 
-  // Kitchen categories
   const categories = [
-    'Produce',
-    'Dairy',
-    'Meat & Seafood',
-    'Grains & Pasta',
-    'Canned Goods',
-    'Spices & Condiments',
-    'Baking',
-    'Snacks',
-    'Beverages',
-    'Others'
+    'Produce', 'Dairy', 'Meat & Seafood', 'Grains & Pasta', 
+    'Canned Goods', 'Spices & Condiments', 'Baking', 
+    'Snacks', 'Beverages', 'Others'
   ];
 
-  // --- INITIALIZATION ---
   useEffect(() => {
     injectStyles();
 
@@ -164,12 +151,8 @@ export default function App() {
     initAuth();
 
     const unsubscribe = onAuthStateChanged(auth, setUser);
-
-    // Close action dropdown when clicking outside
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setShowNavActionDropdown(false);
-      }
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) setShowNavActionDropdown(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
 
@@ -179,28 +162,24 @@ export default function App() {
     };
   }, []);
 
-  // --- FIRESTORE REALTIME SYNC ---
   useEffect(() => {
     if (!user) return;
-
     const invRef = collection(db, 'artifacts', appId, 'users', user.uid, 'inventory');
     const dictRef = collection(db, 'artifacts', appId, 'users', user.uid, 'dictionary');
 
     const unsubInv = onSnapshot(query(invRef), (snap) => {
-      const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setInventory(items);
-    }, (err) => console.error("Firestore Inventory error:", err));
+      setInventory(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => console.error("Firestore error:", err));
 
     const unsubDict = onSnapshot(query(dictRef), (snap) => {
       const dict = {};
       snap.docs.forEach(d => { dict[d.id] = d.data(); });
       setDictionary(dict);
-    }, (err) => console.error("Firestore Dictionary error:", err));
+    }, (err) => console.error("Firestore error:", err));
 
     return () => { unsubInv(); unsubDict(); };
   }, [user]);
 
-  // --- QR/BARCODE SCANNING ---
   useEffect(() => {
     if (!scanning || !scannerMode || !window.Html5Qrcode) return;
 
@@ -211,18 +190,14 @@ export default function App() {
         await html5QrCode.start(
           { facingMode: "environment" },
           { fps: 15, qrbox: { width: 250, height: 160 } },
-          (decodedText) => {
-            handleScanSuccess(decodedText, html5QrCode);
-          },
+          (decodedText) => handleScanSuccess(decodedText, html5QrCode),
           () => { }
         );
       } catch (err) {
-        console.error("Camera access failed", err);
         showToast("Unable to start scanner. Verify camera permissions.");
         setScanning(false);
       }
     };
-
     startScanner();
 
     return () => {
@@ -234,17 +209,12 @@ export default function App() {
 
   const handleScanSuccess = async (barcode, scannerInstance) => {
     playBeep();
-    
     if (scannerInstance && scannerInstance.isScanning) {
       await scannerInstance.stop();
       setScanning(false);
     }
-
-    if (scannerMode === 'restock') {
-      processRestock(barcode);
-    } else if (scannerMode === 'deplete') {
-      processDeplete(barcode);
-    }
+    if (scannerMode === 'restock') processRestock(barcode);
+    else if (scannerMode === 'deplete') processDeplete(barcode);
   };
 
   const showToast = (msg) => {
@@ -252,7 +222,13 @@ export default function App() {
     setTimeout(() => setToastMessage(""), 3000);
   };
 
+  const formatCleanDate = (dateString) => {
+    if (!dateString) return "";
+    return new Date(dateString).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+
   // --- API / LOCAL DICTIONARY PRODUCT RESOLVER ---
+  // Prioritizes locally saved dictionary edits before falling back to Open Food Facts
   const lookupProduct = async (barcode) => {
     if (dictionary[barcode]) {
       const dictItem = dictionary[barcode];
@@ -268,33 +244,19 @@ export default function App() {
       const data = await res.json();
       if (data.status === 1) {
         const prod = data.product;
-        
-        // Auto-category mapping parsing from OFF tags
         let detectedCategory = 'Others';
-        const rawTags = prod.categories_tags || [];
-        const tagsJoined = rawTags.join(' ').toLowerCase();
+        const tagsJoined = (prod.categories_tags || []).join(' ').toLowerCase();
         
-        if (tagsJoined.includes('produce') || tagsJoined.includes('fruit') || tagsJoined.includes('vegetable')) {
-          detectedCategory = 'Produce';
-        } else if (tagsJoined.includes('dairy') || tagsJoined.includes('milk') || tagsJoined.includes('cheese')) {
-          detectedCategory = 'Dairy';
-        } else if (tagsJoined.includes('meat') || tagsJoined.includes('seafood') || tagsJoined.includes('fish') || tagsJoined.includes('chicken')) {
-          detectedCategory = 'Meat & Seafood';
-        } else if (tagsJoined.includes('grain') || tagsJoined.includes('pasta') || tagsJoined.includes('cereal') || tagsJoined.includes('rice') || tagsJoined.includes('bread')) {
-          detectedCategory = 'Grains & Pasta';
-        } else if (tagsJoined.includes('canned') || tagsJoined.includes('soup') || tagsJoined.includes('preserved')) {
-          detectedCategory = 'Canned Goods';
-        } else if (tagsJoined.includes('spice') || tagsJoined.includes('sauce') || tagsJoined.includes('condiment') || tagsJoined.includes('herb')) {
-          detectedCategory = 'Spices & Condiments';
-        } else if (tagsJoined.includes('bake') || tagsJoined.includes('flour') || tagsJoined.includes('sugar')) {
-          detectedCategory = 'Baking';
-        } else if (tagsJoined.includes('snack') || tagsJoined.includes('sweet') || tagsJoined.includes('cookie') || tagsJoined.includes('chip') || tagsJoined.includes('chocolate')) {
-          detectedCategory = 'Snacks';
-        } else if (tagsJoined.includes('beverage') || tagsJoined.includes('drink') || tagsJoined.includes('soda') || tagsJoined.includes('juice') || tagsJoined.includes('coffee') || tagsJoined.includes('tea')) {
-          detectedCategory = 'Beverages';
-        }
+        if (tagsJoined.includes('produce') || tagsJoined.includes('fruit') || tagsJoined.includes('vegetable')) detectedCategory = 'Produce';
+        else if (tagsJoined.includes('dairy') || tagsJoined.includes('milk') || tagsJoined.includes('cheese')) detectedCategory = 'Dairy';
+        else if (tagsJoined.includes('meat') || tagsJoined.includes('seafood') || tagsJoined.includes('fish') || tagsJoined.includes('chicken')) detectedCategory = 'Meat & Seafood';
+        else if (tagsJoined.includes('grain') || tagsJoined.includes('pasta') || tagsJoined.includes('cereal') || tagsJoined.includes('rice') || tagsJoined.includes('bread')) detectedCategory = 'Grains & Pasta';
+        else if (tagsJoined.includes('canned') || tagsJoined.includes('soup') || tagsJoined.includes('preserved')) detectedCategory = 'Canned Goods';
+        else if (tagsJoined.includes('spice') || tagsJoined.includes('sauce') || tagsJoined.includes('condiment') || tagsJoined.includes('herb')) detectedCategory = 'Spices & Condiments';
+        else if (tagsJoined.includes('bake') || tagsJoined.includes('flour') || tagsJoined.includes('sugar')) detectedCategory = 'Baking';
+        else if (tagsJoined.includes('snack') || tagsJoined.includes('sweet') || tagsJoined.includes('cookie') || tagsJoined.includes('chip') || tagsJoined.includes('chocolate')) detectedCategory = 'Snacks';
+        else if (tagsJoined.includes('beverage') || tagsJoined.includes('drink') || tagsJoined.includes('soda') || tagsJoined.includes('juice') || tagsJoined.includes('coffee') || tagsJoined.includes('tea')) detectedCategory = 'Beverages';
 
-        // Smarter extraction for Open Food Facts formatting
         const extractedBrand = prod.brands ? prod.brands.split(',')[0].trim() : "";
         const extractedProduct = prod.product_name || prod.product_name_en || prod.generic_name || "";
 
@@ -310,47 +272,65 @@ export default function App() {
         };
       }
     } catch (err) {
-      console.warn("Open Food Facts retrieval failed, fallback active.", err);
+      console.warn("Open Food Facts retrieval failed", err);
     }
     return { barcode, brandName: "", productName: "", name: "", weight: "", allergens: "", nutriscore: "", category: "Others" };
   };
 
   const processRestock = async (barcode) => {
     const productInfo = await lookupProduct(barcode);
-    
     setItemForm({
       ...productInfo,
       qty: 1,
       expirationDate: "",
       mode: 'restock',
-      isNew: !productInfo.name && !productInfo.productName
+      isNew: !productInfo.name && !productInfo.productName && !productInfo.brandName
     });
   };
 
+  // Search handler for the manual addition popup
+  const handleManualBarcodeSearch = async () => {
+    if (!itemForm.barcode) return;
+    setSearchingBarcode(true);
+    const productInfo = await lookupProduct(itemForm.barcode);
+    if (productInfo.name || productInfo.productName || productInfo.brandName) {
+      setItemForm(prev => ({
+        ...prev,
+        ...productInfo,
+        qty: prev.qty, // Keep what user might have typed
+        expirationDate: prev.expirationDate // Keep what user might have typed
+      }));
+      showToast("Product data found and loaded!");
+    } else {
+      showToast("Product not found. Please fill manually.");
+    }
+    setSearchingBarcode(false);
+  };
+
+  // Process depletion ensuring we take the nearest expiration date
   const processDeplete = async (barcode) => {
     if (!user) return;
-    
     const existingItems = inventory.filter(i => i.barcode === barcode && i.qty > 0);
     
     if (existingItems.length > 0) {
+      // Sort to prioritize the nearest expiration date first
       const sorted = [...existingItems].sort((a, b) => {
         if (!a.expirationDate) return 1;
         if (!b.expirationDate) return -1;
         return new Date(a.expirationDate) - new Date(b.expirationDate);
       });
-      const target = sorted[0];
+      
+      const target = sorted[0]; // Nearest expiration
       const newQty = Math.max(0, target.qty - 1);
       
-      const itemRef = doc(db, 'artifacts', appId, 'users', user.uid, 'inventory', target.id);
-      await updateDoc(itemRef, { qty: newQty });
+      await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'inventory', target.id), { qty: newQty });
       
-      const displayName = target.productName || target.name;
       const displayBrand = target.brandName ? `[${target.brandName}] ` : "";
-      showToast(`Reduced: ${displayBrand}${displayName} (In stock: ${newQty})`);
+      const displayExpiry = target.expirationDate ? ` (Exp: ${formatCleanDate(target.expirationDate)})` : "";
+      showToast(`Reduced nearest expiry: ${displayBrand}${target.productName || target.name}${displayExpiry}`);
     } else {
       showToast("This item is not present in your registered stock.");
     }
-    
     setScanning(true);
   };
 
@@ -362,9 +342,11 @@ export default function App() {
     const brandStr = (itemForm.brandName || "").trim();
     const productStr = (itemForm.productName || "").trim();
     const combinedName = `${brandStr} ${productStr}`.trim() || itemForm.name;
+    const cleanBarcode = itemForm.barcode || `MANUAL-${Date.now()}`;
 
-    if (itemForm.barcode) {
-      const dictRef = doc(db, 'artifacts', appId, 'users', user.uid, 'dictionary', itemForm.barcode);
+    // 1. Persistent Dictionary Save - Always saves edits so future scans reuse the data
+    if (cleanBarcode && !cleanBarcode.startsWith('MANUAL-')) {
+      const dictRef = doc(db, 'artifacts', appId, 'users', user.uid, 'dictionary', cleanBarcode);
       await setDoc(dictRef, {
         brandName: brandStr,
         productName: productStr,
@@ -376,57 +358,89 @@ export default function App() {
       }, { merge: true });
     }
 
-    if (itemForm.id) {
-      const itemRef = doc(db, 'artifacts', appId, 'users', user.uid, 'inventory', itemForm.id);
-      await updateDoc(itemRef, {
-        brandName: brandStr,
-        productName: productStr,
-        name: combinedName,
-        weight: itemForm.weight,
-        category: itemForm.category,
-        expirationDate: itemForm.expirationDate,
-        qty: parseInt(itemForm.qty),
-        allergens: itemForm.allergens || "",
-        nutriscore: itemForm.nutriscore || ""
-      });
-      showToast("Information saved.");
-    } else {
-      const invRef = collection(db, 'artifacts', appId, 'users', user.uid, 'inventory');
-      const newDocRef = doc(invRef);
-      await setDoc(newDocRef, {
-        barcode: itemForm.barcode || `MANUAL-${Date.now()}`,
-        brandName: brandStr,
-        productName: productStr,
-        name: combinedName,
-        weight: itemForm.weight,
-        allergens: itemForm.allergens || "",
-        nutriscore: itemForm.nutriscore || "",
-        category: itemForm.category || 'Others',
-        expirationDate: itemForm.expirationDate,
-        qty: parseInt(itemForm.qty),
-        dateAdded: new Date().toISOString()
-      });
-      showToast(`Registered ${combinedName}`);
+    // 2. Smart Merging Logic (Merge if same Barcode AND exact same Expiration)
+    let merged = false;
+    if (itemForm.barcode && (itemForm.mode === 'restock' || itemForm.mode === 'manual' || !itemForm.id)) {
+      const existingMatch = inventory.find(i => 
+        i.barcode === itemForm.barcode && 
+        (i.expirationDate || "") === (itemForm.expirationDate || "")
+      );
+
+      if (existingMatch) {
+        // If it matches an existing batch, add the quantities together
+        const matchRef = doc(db, 'artifacts', appId, 'users', user.uid, 'inventory', existingMatch.id);
+        const newQty = existingMatch.id === itemForm.id 
+            ? parseInt(itemForm.qty) // We are directly editing/saving the existing Out-of-Stock record
+            : existingMatch.qty + parseInt(itemForm.qty); // We are adding to a completely separate existing match
+        
+        await updateDoc(matchRef, {
+          qty: newQty,
+          brandName: brandStr,
+          productName: productStr,
+          name: combinedName,
+          weight: itemForm.weight,
+          category: itemForm.category,
+          allergens: itemForm.allergens || "",
+          nutriscore: itemForm.nutriscore || ""
+        });
+
+        // Clean up out-of-stock template if we merged into a different existing batch
+        if (itemForm.id && existingMatch.id !== itemForm.id) {
+          const oldItem = inventory.find(i => i.id === itemForm.id);
+          if (oldItem && oldItem.qty === 0) {
+             await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'inventory', itemForm.id));
+          }
+        }
+        merged = true;
+        showToast(existingMatch.id === itemForm.id ? `Restocked ${combinedName}` : `Merged with existing batch (In stock: ${newQty})`);
+      }
+    }
+
+    // 3. Standard Saving if not merged
+    if (!merged) {
+      if (itemForm.id && itemForm.mode === 'edit') {
+        // Standard Edit
+        await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'inventory', itemForm.id), {
+          brandName: brandStr, productName: productStr, name: combinedName, weight: itemForm.weight,
+          category: itemForm.category, expirationDate: itemForm.expirationDate, qty: parseInt(itemForm.qty),
+          allergens: itemForm.allergens || "", nutriscore: itemForm.nutriscore || ""
+        });
+        showToast("Information saved.");
+      } else if (itemForm.id && itemForm.mode === 'restock') {
+        // We clicked +Restock on a 0-qty item, assigned a NEW expiry, so update that document row!
+        await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'inventory', itemForm.id), {
+          brandName: brandStr, productName: productStr, name: combinedName, weight: itemForm.weight,
+          category: itemForm.category, expirationDate: itemForm.expirationDate, qty: parseInt(itemForm.qty),
+          allergens: itemForm.allergens || "", nutriscore: itemForm.nutriscore || ""
+        });
+        showToast(`Restocked ${combinedName}`);
+      } else {
+        // Completely new registry row
+        const newDocRef = doc(collection(db, 'artifacts', appId, 'users', user.uid, 'inventory'));
+        await setDoc(newDocRef, {
+          barcode: cleanBarcode, brandName: brandStr, productName: productStr, name: combinedName,
+          weight: itemForm.weight, allergens: itemForm.allergens || "", nutriscore: itemForm.nutriscore || "",
+          category: itemForm.category || 'Others', expirationDate: itemForm.expirationDate,
+          qty: parseInt(itemForm.qty), dateAdded: new Date().toISOString()
+        });
+        showToast(`Registered ${combinedName}`);
+      }
     }
 
     const wasRestocking = itemForm.mode === 'restock';
     setItemForm(null);
-    if (wasRestocking && scannerMode === 'restock') {
-      setScanning(true);
-    }
+    if (wasRestocking && scannerMode === 'restock') setScanning(true);
   };
 
   const adjustQty = async (item, delta) => {
     if (!user) return;
     const newQty = Math.max(0, item.qty + delta);
-    const itemRef = doc(db, 'artifacts', appId, 'users', user.uid, 'inventory', item.id);
-    await updateDoc(itemRef, { qty: newQty });
+    await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'inventory', item.id), { qty: newQty });
   };
 
   const deleteItem = async (itemId) => {
     if (!user) return;
-    const itemRef = doc(db, 'artifacts', appId, 'users', user.uid, 'inventory', itemId);
-    await deleteDoc(itemRef);
+    await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'inventory', itemId));
     showToast("Product deleted from register.");
   };
 
@@ -443,76 +457,45 @@ export default function App() {
     }).join(", ");
     
     const prompt = `Create an elegant, easy-to-follow recipe utilizing primarily these kitchen items: ${inStock || "none (recommend dynamic basics)"}. Aim for delicious, healthy food, with a bias towards modern Filipino home cooking if matching items. Cleanly break down into: Recipe Title, prep time, ingredients, and step-by-step directions. Output clearly without standard markdown bold symbols or asterisks.`;
-
-    // The Canvas environment automatically provides the API key. Keep this empty.
     const apiKey = "AIzaSyAG8lCiJTrSIlQypT6jZ2NubcHFomPJ_38"; 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
     
-    // Exponential Backoff configuration
     const maxRetries = 5;
     const delays = [1000, 2000, 4000, 8000, 16000];
-    let success = false;
-    let text = "";
+    let success = false, text = "";
 
     for (let i = 0; i <= maxRetries; i++) {
       try {
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }]
-          })
-        });
-
+        const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-
         const data = await res.json();
         text = data.candidates?.[0]?.content?.parts?.[0]?.text || "Chef's table is occupied. Try again soon.";
-        success = true;
-        break; // Success! Exit the retry loop
+        success = true; break; 
       } catch (err) {
-        if (i < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, delays[i]));
-        }
+        if (i < maxRetries) await new Promise(resolve => setTimeout(resolve, delays[i]));
       }
     }
 
     if (success) {
-      text = text.replace(/\*\*/g, '')
-                 .replace(/###/g, '')
-                 .replace(/##/g, '');
-      setAiRecipe(text);
+      setAiRecipe(text.replace(/\*\*/g, '').replace(/###/g, '').replace(/##/g, ''));
     } else {
       setAiRecipe("Unable to reach Kusina AI. Please ensure you are connected to the internet and try again.");
     }
-    
     setLoadingRecipe(false);
   };
 
-  // --- UTILITY DATA ANALYSIS ---
   const getDaysUntilExpiry = (dateString) => {
     if (!dateString) return null;
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const expDate = new Date(dateString);
-    const diffTime = expDate - today;
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  };
-
-  const formatCleanDate = (dateString) => {
-    if (!dateString) return "";
-    const options = { year: 'numeric', month: 'short', day: 'numeric' };
-    return new Date(dateString).toLocaleDateString(undefined, options);
+    const today = new Date(); today.setHours(0,0,0,0);
+    return Math.ceil((new Date(dateString) - today) / (1000 * 60 * 60 * 24));
   };
 
   const renderExpiryDisplay = (dateString) => {
     if (!dateString) return null;
     const days = getDaysUntilExpiry(dateString);
-    
     if (days < 0) return <span className="bg-[#dc2626] text-white font-bold text-[10px] tracking-[0.02em] border border-[#b91c1c] rounded px-2 py-1 align-middle inline-flex">Expired</span>;
     if (days === 0) return <span className="bg-[#dc2626] text-white font-bold text-[10px] tracking-[0.02em] border border-[#b91c1c] rounded px-2 py-1 align-middle inline-flex">Expires today</span>;
     if (days <= 14) return <span className="bg-[#dc2626] text-white font-bold text-[10px] tracking-[0.02em] border border-[#b91c1c] rounded px-2 py-1 align-middle inline-flex">Expires in {days}d</span>;
-    
     return <span className="font-medium bg-white px-1.5 py-0.5 rounded border border-gray-200 uppercase inline-flex items-center" style={{ fontSize: '10px', color: '#53453f' }}>EXP: {formatCleanDate(dateString).toUpperCase()}</span>;
   };
 
@@ -530,12 +513,8 @@ export default function App() {
 
   const getNutriColor = (grade) => {
     const score = String(grade).toLowerCase();
-    if (score === 'a') return '#038141';
-    if (score === 'b') return '#85bb2f';
-    if (score === 'c') return '#fec010';
-    if (score === 'd') return '#ee811a';
-    if (score === 'e') return '#e63e11';
-    return '#8c8c8c';
+    if (score === 'a') return '#038141'; if (score === 'b') return '#85bb2f'; if (score === 'c') return '#fec010';
+    if (score === 'd') return '#ee811a'; if (score === 'e') return '#e63e11'; return '#8c8c8c';
   };
 
   const isValidNutriscore = (score) => {
@@ -544,7 +523,6 @@ export default function App() {
     return clean !== "" && clean !== "unknown" && clean !== "n/a" && ["a", "b", "c", "d", "e"].includes(clean);
   };
 
-  // Filtering Logic
   const inStockItems = inventory.filter(i => i.qty > 0);
   const outOfStockItems = inventory.filter(i => i.qty === 0);
   
@@ -566,12 +544,13 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col pb-12 bg-[#faf8f5]">
       
-      {/* HEADER SECTION WITH COMPACT EQUAL HEIGHT LOGO AND LOGOTYPE */}
+      {/* HEADER SECTION WITH REDESIGNED LOGOTYPE */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm px-4 py-3">
         <div className="container mx-auto max-w-5xl flex justify-between items-center h-[36px]">
           <div className="flex items-center cursor-pointer h-full" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
             <div className="flex items-center">
-              <h5 className="font-bold mb-0 text-[#879e7c]] tracking-tight text-[20px] flex items-center">Kusina</h5>
+              {/* Changed color to brand green and font size to 20px, removed logo */}
+              <h5 className="font-bold mb-0 text-[#58734b] tracking-tight text-[20px] flex items-center">Kusina</h5>
             </div>
           </div>
           
@@ -644,7 +623,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* BRIGHT MANUAL ADD BUTTON LOCATED DIRECTLY BELOW THE DUAL GRID */}
+        {/* BRIGHT MANUAL ADD BUTTON */}
         <div 
           className="rounded-[18px] p-4 mb-4 text-center flex items-center justify-center cursor-pointer transition-all duration-250 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[2px] hover:shadow-[0_8px_24px_rgba(83,69,63,0.05)] bg-[#e5efe2] border border-[#c8dcc3]"
           onClick={() => setItemForm({ barcode: "", brandName: "", productName: "", name: "", weight: "", allergens: "", nutriscore: "", category: "Others", qty: 1, expirationDate: "", mode: 'manual' })}
@@ -764,9 +743,12 @@ export default function App() {
                         <div className="text-gray-500 text-[10px]">{item.weight}</div>
                       </div>
                       <div className="flex items-center gap-2">
+                        {/* RESTOCK POPUP TRIGGER: Clears expiration date & sets mode to restock 
+                          so user must fill expiration date before it logs. 
+                        */}
                         <button 
                           className="px-2.5 py-1 border border-green-500 text-green-600 rounded-full hover:bg-green-50 transition-colors text-[10px]"
-                          onClick={() => adjustQty(item, 1)}
+                          onClick={() => setItemForm({ ...item, qty: 1, expirationDate: "", mode: 'restock' })}
                         >
                           + Restock
                         </button>
@@ -1002,12 +984,34 @@ export default function App() {
                 </div>
               )}
 
-              {itemForm.barcode && (
+              {/* MANUAL BARCODE AUTO-SEARCH FEATURE */}
+              {itemForm.mode === 'manual' ? (
+                <div className="mb-3">
+                  <label className="block text-[11px] font-bold text-gray-500 mb-1.5">Barcode ID (Auto-Search)</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-[#879e7c] focus:border-transparent" 
+                      value={itemForm.barcode} 
+                      onChange={(e) => setItemForm({...itemForm, barcode: e.target.value})} 
+                      placeholder="Enter barcode..." 
+                    />
+                    <button 
+                      type="button"
+                      className="bg-[#879e7c] hover:bg-[#768d6b] text-white px-3.5 rounded-lg flex items-center justify-center transition-colors disabled:opacity-50"
+                      onClick={handleManualBarcodeSearch}
+                      disabled={!itemForm.barcode || searchingBarcode}
+                    >
+                      {searchingBarcode ? <RefreshCw size={14} className="animate-spin" /> : <Search size={14} />}
+                    </button>
+                  </div>
+                </div>
+              ) : itemForm.barcode ? (
                 <div className="mb-3">
                   <label className="block text-[11px] font-bold text-gray-500 mb-1.5">Barcode ID</label>
                   <input type="text" className="w-full bg-gray-100 border border-transparent rounded-lg px-3 py-2 text-[12px] text-gray-600 focus:outline-none" value={itemForm.barcode} readOnly />
                 </div>
-              )}
+              ) : null}
               
               <div className="grid grid-cols-2 gap-3 mb-3">
                 <div>
@@ -1065,6 +1069,7 @@ export default function App() {
                     className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-[#879e7c] focus:border-transparent" 
                     value={itemForm.expirationDate || ''} 
                     onChange={(e) => setItemForm({...itemForm, expirationDate: e.target.value})} 
+                    required={itemForm.mode === 'restock'}
                   />
                 </div>
                 <div>
@@ -1120,7 +1125,7 @@ export default function App() {
                 type="submit" 
                 className="bg-[#879e7c] hover:bg-[#768d6b] text-white w-full py-3 font-semibold rounded-xl text-[13px] transition-colors shadow-sm" 
               >
-                REGISTER
+                {itemForm.mode === 'RESTOCK' ? 'CONFIRM RESTOCK BATCH' : 'REGISTER'}
               </button>
             </form>
           </div>
