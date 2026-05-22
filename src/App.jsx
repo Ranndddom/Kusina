@@ -427,6 +427,19 @@ export default function App() {
       }
     }
 
+    // 4. Out of Stock Cleanup: If we successfully saved a positive quantity of an item via scan/restock,
+    // and there is an existing out-of-stock dummy entry with the SAME barcode, remove it automatically.
+    if (parseInt(itemForm.qty) > 0 && cleanBarcode && !cleanBarcode.startsWith('MANUAL-')) {
+      const oosMatches = inventory.filter(i => 
+        i.barcode === cleanBarcode && 
+        i.qty === 0 && 
+        i.id !== itemForm.id // Ignore the record we just edited if it was the OOS one
+      );
+      for (const oos of oosMatches) {
+        await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'inventory', oos.id));
+      }
+    }
+
     const wasRestocking = itemForm.mode === 'restock';
     setItemForm(null);
     if (wasRestocking && scannerMode === 'restock') setScanning(true);
@@ -453,9 +466,9 @@ export default function App() {
   const renderExpiryDisplay = (dateString) => {
     if (!dateString) return null;
     const days = getDaysUntilExpiry(dateString);
-    if (days < 0) return <span className="bg-[#dc2626] text-white font-bold text-[10px] tracking-[0.02em] border border-[#b91c1c] rounded px-2 py-1 align-middle inline-flex">Expired</span>;
-    if (days === 0) return <span className="bg-[#dc2626] text-white font-bold text-[10px] tracking-[0.02em] border border-[#b91c1c] rounded px-2 py-1 align-middle inline-flex">Expires today</span>;
-    if (days <= 14) return <span className="bg-[#dc2626] text-white font-bold text-[10px] tracking-[0.02em] border border-[#b91c1c] rounded px-2 py-1 align-middle inline-flex">Expires in {days}d</span>;
+    if (days < 0) return <span className="bg-[#dc2626] text-white font-bold text-[10px] tracking-[0.02em] border border-[#b91c1c] rounded px-1.5 py-0.5 align-middle inline-flex items-center">Expired</span>;
+    if (days === 0) return <span className="bg-[#dc2626] text-white font-bold text-[10px] tracking-[0.02em] border border-[#b91c1c] rounded px-1.5 py-0.5 align-middle inline-flex items-center">Expires today</span>;
+    if (days <= 14) return <span className="bg-[#dc2626] text-white font-bold text-[10px] tracking-[0.02em] border border-[#b91c1c] rounded px-1.5 py-0.5 align-middle inline-flex items-center">Expires in {days}d</span>;
     return <span className="font-medium bg-white px-1.5 py-0.5 rounded border border-gray-200 uppercase inline-flex items-center" style={{ fontSize: '10px', color: '#53453f' }}>EXP: {formatCleanDate(dateString).toUpperCase()}</span>;
   };
 
@@ -795,10 +808,10 @@ export default function App() {
                               
                               {/* Meta Indicators */}
                               <div className="flex flex-wrap items-center gap-1.5 mt-2 text-[10px]">
-                                <span className="bg-white text-gray-500 px-1.5 py-0.5 rounded border border-gray-200 uppercase">{item.weight || 'WEIGHT UNSPECIFIED'}</span>
+                                <span className="bg-white text-gray-500 px-1.5 py-0.5 rounded border border-gray-200 uppercase inline-flex items-center">{item.weight || 'WEIGHT UNSPECIFIED'}</span>
                                 {renderExpiryDisplay(item.expirationDate)}
                                 {item.allergens && (
-                                  <span className="bg-orange-500/10 border border-orange-500 text-orange-700 font-bold px-1.5 py-[1px] rounded inline-flex items-center text-[10px]">
+                                  <span className="bg-orange-500/10 border border-orange-500 text-orange-700 font-bold px-1.5 py-0.5 rounded inline-flex items-center text-[10px]">
                                     Allergens: {item.allergens}
                                   </span>
                                 )}
