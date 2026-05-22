@@ -290,7 +290,9 @@ export default function App() {
 
         return {
           barcode,
-          name: prod.product_name || "",
+          brandName: prod.brands || "",
+          productName: prod.product_name || "",
+          name: `${prod.brands || ""} ${prod.product_name || ""}`.trim(),
           weight: prod.quantity || "",
           allergens: prod.allergens_from_ingredients ? prod.allergens_from_ingredients.replace(/en:/g, '') : "",
           nutriscore: prod.nutriscore_grade || "",
@@ -300,7 +302,7 @@ export default function App() {
     } catch (err) {
       console.warn("Open Food Facts retrieval failed, fallback active.", err);
     }
-    return { barcode, name: "", weight: "", allergens: "", nutriscore: "", category: "Others" };
+    return { barcode, brandName: "", productName: "", name: "", weight: "", allergens: "", nutriscore: "", category: "Others" };
   };
 
   const processRestock = async (barcode) => {
@@ -311,7 +313,7 @@ export default function App() {
       qty: 1,
       expirationDate: "",
       mode: 'restock',
-      isNew: !productInfo.name
+      isNew: !productInfo.name && !productInfo.productName
     });
   };
 
@@ -331,7 +333,10 @@ export default function App() {
       
       const itemRef = doc(db, 'artifacts', appId, 'users', user.uid, 'inventory', target.id);
       await updateDoc(itemRef, { qty: newQty });
-      showToast(`Reduced: ${target.name} (In stock: ${newQty})`);
+      
+      const displayName = target.productName || target.name;
+      const displayBrand = target.brandName ? `[${target.brandName}] ` : "";
+      showToast(`Reduced: ${displayBrand}${displayName} (In stock: ${newQty})`);
     } else {
       showToast("This item is not present in your registered stock.");
     }
@@ -344,10 +349,16 @@ export default function App() {
     e.preventDefault();
     if (!user || !itemForm) return;
 
+    const brandStr = (itemForm.brandName || "").trim();
+    const productStr = (itemForm.productName || "").trim();
+    const combinedName = `${brandStr} ${productStr}`.trim() || itemForm.name;
+
     if (itemForm.barcode) {
       const dictRef = doc(db, 'artifacts', appId, 'users', user.uid, 'dictionary', itemForm.barcode);
       await setDoc(dictRef, {
-        name: itemForm.name,
+        brandName: brandStr,
+        productName: productStr,
+        name: combinedName,
         weight: itemForm.weight,
         allergens: itemForm.allergens || "",
         nutriscore: itemForm.nutriscore || "",
@@ -358,7 +369,9 @@ export default function App() {
     if (itemForm.id) {
       const itemRef = doc(db, 'artifacts', appId, 'users', user.uid, 'inventory', itemForm.id);
       await updateDoc(itemRef, {
-        name: itemForm.name,
+        brandName: brandStr,
+        productName: productStr,
+        name: combinedName,
         weight: itemForm.weight,
         category: itemForm.category,
         expirationDate: itemForm.expirationDate,
@@ -372,7 +385,9 @@ export default function App() {
       const newDocRef = doc(invRef);
       await setDoc(newDocRef, {
         barcode: itemForm.barcode || `MANUAL-${Date.now()}`,
-        name: itemForm.name,
+        brandName: brandStr,
+        productName: productStr,
+        name: combinedName,
         weight: itemForm.weight,
         allergens: itemForm.allergens || "",
         nutriscore: itemForm.nutriscore || "",
@@ -381,7 +396,7 @@ export default function App() {
         qty: parseInt(itemForm.qty),
         dateAdded: new Date().toISOString()
       });
-      showToast(`Registered ${itemForm.name}`);
+      showToast(`Registered ${combinedName}`);
     }
 
     const wasRestocking = itemForm.mode === 'restock';
@@ -411,7 +426,12 @@ export default function App() {
     setAiRecipe("");
     setShowRecipeModal(true);
     
-    const inStock = inventory.filter(i => i.qty > 0).map(i => `${i.name} (${i.weight || 'unit'})`).join(", ");
+    const inStock = inventory.filter(i => i.qty > 0).map(i => {
+      const name = i.productName || i.name;
+      const brand = i.brandName ? `${i.brandName} ` : '';
+      return `${brand}${name} (${i.weight || 'unit'})`;
+    }).join(", ");
+    
     const prompt = `Create an elegant, easy-to-follow recipe utilizing primarily these kitchen items: ${inStock || "none (recommend dynamic basics)"}. Aim for delicious, healthy food, with a bias towards modern Filipino home cooking if matching items. Cleanly break down into: Recipe Title, prep time, ingredients, and step-by-step directions. Output clearly without standard markdown bold symbols or asterisks.`;
 
     // The Canvas environment automatically provides the API key. Keep this empty.
@@ -519,7 +539,11 @@ export default function App() {
   const outOfStockItems = inventory.filter(i => i.qty === 0);
   
   const filteredInStock = inStockItems.filter(i => {
-    const matchesSearch = i.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const term = searchQuery.toLowerCase();
+    const matchesSearch = 
+      i.name.toLowerCase().includes(term) ||
+      (i.brandName && i.brandName.toLowerCase().includes(term)) ||
+      (i.productName && i.productName.toLowerCase().includes(term));
     const matchesCategory = selectedCategoryFilter === "All" || i.category === selectedCategoryFilter;
     return matchesSearch && matchesCategory;
   });
@@ -536,8 +560,11 @@ export default function App() {
       <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm px-4 py-3">
         <div className="container mx-auto max-w-5xl flex justify-between items-center h-[36px]">
           <div className="flex items-center cursor-pointer h-full" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+            <div className="mr-2.5 flex items-center justify-center w-[28px] h-[28px] overflow-hidden rounded-md bg-[#f0f0f0]">
+              <img src="https://placehold.co/100x100/879e7c/ffffff?text=K" alt="Logo" className="w-full h-full object-cover" />
+            </div>
             <div className="flex items-center">
-              <h5 className="font-bold mb-0 text-[#879e7c] tracking-tight text-[20px] flex items-center">Kusina</h5>
+              <h5 className="font-bold mb-0 text-[#3e3835] tracking-tight text-[16px] flex items-center">Kusina</h5>
             </div>
           </div>
           
@@ -613,7 +640,7 @@ export default function App() {
         {/* BRIGHT MANUAL ADD BUTTON LOCATED DIRECTLY BELOW THE DUAL GRID */}
         <div 
           className="rounded-[18px] p-4 mb-4 text-center flex items-center justify-center cursor-pointer transition-all duration-250 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[2px] hover:shadow-[0_8px_24px_rgba(83,69,63,0.05)] bg-[#e5efe2] border border-[#c8dcc3]"
-          onClick={() => setItemForm({ barcode: "", name: "", weight: "", allergens: "", nutriscore: "", category: "Others", qty: 1, expirationDate: "", mode: 'manual' })}
+          onClick={() => setItemForm({ barcode: "", brandName: "", productName: "", name: "", weight: "", allergens: "", nutriscore: "", category: "Others", qty: 1, expirationDate: "", mode: 'manual' })}
         >
           <Database size={16} className="mr-2 text-green-700" />
           <span className="font-bold text-green-700 text-[13px]">Add Item Manually</span>
@@ -685,10 +712,14 @@ export default function App() {
               ) : (
                 <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-1">
                   {nearlyExpiredItems.map(item => {
+                    const dispName = item.productName || item.name;
                     return (
                       <div key={item.id} className="p-2 border border-gray-200 rounded-xl flex justify-between items-center bg-gray-50 text-[12px]">
                         <div className="truncate mr-2 cursor-pointer hover:opacity-70 transition-opacity" onClick={() => setSelectedProductDetails(item)}>
-                          <div className="font-semibold text-[#3e3835] truncate">{item.name}</div>
+                          <div className="font-semibold text-[#3e3835] truncate flex flex-col">
+                            {item.brandName && <span className="text-[9px] font-bold text-[#58734b] bg-[#e5efe2] px-1.5 py-0.5 rounded uppercase tracking-wide mb-0.5 w-max">{item.brandName}</span>}
+                            <span className="truncate">{dispName}</span>
+                          </div>
                           <div className="text-gray-500 flex items-center gap-1.5 flex-wrap text-[10px]">
                             <span>{item.weight || 'No weight'}</span>
                           </div>
@@ -719,7 +750,10 @@ export default function App() {
                   {outOfStockItems.map(item => (
                     <div key={item.id} className="p-2 border border-gray-200 rounded-xl flex justify-between items-center text-[12px]">
                       <div className="truncate mr-2">
-                        <div className="font-semibold text-[#3e3835] truncate">{item.name}</div>
+                        <div className="font-semibold text-[#3e3835] truncate flex flex-col">
+                          {item.brandName && <span className="text-[9px] font-bold text-[#58734b] bg-[#e5efe2] px-1.5 py-0.5 rounded uppercase tracking-wide mb-0.5 w-max">{item.brandName}</span>}
+                          <span className="truncate">{item.productName || item.name}</span>
+                        </div>
                         <div className="text-gray-500 text-[10px]">{item.weight}</div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -812,7 +846,12 @@ export default function App() {
                           <div key={item.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3 sm:p-4 flex justify-between items-center">
                             <div className="truncate mr-3 cursor-pointer hover:opacity-70 transition-opacity" onClick={() => setSelectedProductDetails(item)}>
                               <div className="font-semibold text-[#3e3835] mb-1 truncate flex items-center flex-wrap gap-2 text-[13px]">
-                                <span>{item.name}</span>
+                                {item.brandName && (
+                                  <span className="text-[10px] font-bold text-[#58734b] uppercase tracking-wider bg-[#e5efe2] px-1.5 py-0.5 rounded">
+                                    {item.brandName}
+                                  </span>
+                                )}
+                                <span>{item.productName || item.name}</span>
                                 {/* Perfect Circle Nutri-Score Color Tag - Excludes empty/unknown scores */}
                                 {hasScore && (
                                   <span 
@@ -844,7 +883,7 @@ export default function App() {
                                 <span className="font-bold px-2 text-[11px] min-w-[20px] text-center">{item.qty}</span>
                                 <button className="px-1.5 py-0.5 text-gray-500 hover:text-gray-700 text-[12px] font-medium transition-colors" onClick={() => adjustQty(item, 1)}>+</button>
                               </div>
-                              <button className="bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full w-[28px] h-[28px] inline-flex items-center justify-center transition-colors" onClick={() => setItemForm({ ...item, mode: 'edit' })} title="Edit item">
+                              <button className="bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full w-[28px] h-[28px] inline-flex items-center justify-center transition-colors" onClick={() => setItemForm({ ...item, brandName: item.brandName || "", productName: item.productName || item.name || "", mode: 'edit' })} title="Edit item">
                                 <Edit3 size={11} />
                               </button>
                               <button className="bg-gray-100 hover:bg-red-100 text-red-500 rounded-full w-[28px] h-[28px] inline-flex items-center justify-center transition-colors" onClick={() => deleteItem(item.id)} title="Delete item">
@@ -955,16 +994,28 @@ export default function App() {
                 </div>
               )}
               
-              <div className="mb-3">
-                <label className="block text-[11px] font-bold text-gray-500 mb-1.5">Product Name</label>
-                <input 
-                  type="text" 
-                  className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-[#879e7c] focus:border-transparent" 
-                  value={itemForm.name} 
-                  onChange={(e) => setItemForm({...itemForm, name: e.target.value})} 
-                  required 
-                  placeholder="e.g., Soy Sauce"
-                />
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-500 mb-1.5">Brand Name</label>
+                  <input 
+                    type="text" 
+                    className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-[#879e7c] focus:border-transparent" 
+                    value={itemForm.brandName || ""} 
+                    onChange={(e) => setItemForm({...itemForm, brandName: e.target.value})} 
+                    placeholder="e.g., Kikkoman"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-500 mb-1.5">Product Name</label>
+                  <input 
+                    type="text" 
+                    className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-[#879e7c] focus:border-transparent" 
+                    value={itemForm.productName || ""} 
+                    onChange={(e) => setItemForm({...itemForm, productName: e.target.value})} 
+                    required 
+                    placeholder="e.g., Soy Sauce"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3 mb-3">
@@ -1072,7 +1123,14 @@ export default function App() {
               </button>
             </div>
             <div className="p-4 sm:p-5">
-              <h4 className="font-bold text-[#3e3835] mb-1.5">{selectedProductDetails.name}</h4>
+              <div className="flex flex-col mb-1.5">
+                {selectedProductDetails.brandName && (
+                  <span className="text-[10px] uppercase font-bold text-[#58734b] tracking-wider mr-auto bg-[#e5efe2] px-2 py-0.5 rounded mb-1">
+                    {selectedProductDetails.brandName}
+                  </span>
+                )}
+                <h4 className="font-bold text-[#3e3835] mb-0">{selectedProductDetails.productName || selectedProductDetails.name}</h4>
+              </div>
               <p className="text-gray-500 text-sm mb-5">{selectedProductDetails.category} • {selectedProductDetails.weight || 'No weight listed'}</p>
               
               <div className="flex flex-col gap-4">
