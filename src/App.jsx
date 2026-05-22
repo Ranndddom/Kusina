@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import myLogo from '/src/assets/Kusina.png';
 import { 
   PlusCircle, ShoppingCart, Database, Sparkles, 
   Plus, X, Edit3, Trash2, Search, CheckCircle, AlertTriangle, ChevronRight, RefreshCw
@@ -538,7 +537,7 @@ export default function App() {
         <div className="container mx-auto max-w-5xl flex justify-between items-center h-[36px]">
           <div className="flex items-center cursor-pointer h-full" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
             <div className="flex items-center">
-              <h5 className="font-bold mb-0 text-[#3e3835] tracking-tight text-[20px] flex items-center">Kusina</h5>
+              <h5 className="font-bold mb-0 text-[#879e7c] tracking-tight text-[20px] flex items-center">Kusina</h5>
             </div>
           </div>
           
