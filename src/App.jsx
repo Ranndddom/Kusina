@@ -255,7 +255,13 @@ export default function App() {
   // --- API / LOCAL DICTIONARY PRODUCT RESOLVER ---
   const lookupProduct = async (barcode) => {
     if (dictionary[barcode]) {
-      return { barcode, ...dictionary[barcode] };
+      const dictItem = dictionary[barcode];
+      return { 
+        barcode, 
+        brandName: dictItem.brandName || "",
+        productName: dictItem.productName || dictItem.name || "",
+        ...dictItem 
+      };
     }
     try {
       const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${barcode}.json`);
@@ -288,11 +294,15 @@ export default function App() {
           detectedCategory = 'Beverages';
         }
 
+        // Smarter extraction for Open Food Facts formatting
+        const extractedBrand = prod.brands ? prod.brands.split(',')[0].trim() : "";
+        const extractedProduct = prod.product_name || prod.product_name_en || prod.generic_name || "";
+
         return {
           barcode,
-          brandName: prod.brands || "",
-          productName: prod.product_name || "",
-          name: `${prod.brands || ""} ${prod.product_name || ""}`.trim(),
+          brandName: extractedBrand,
+          productName: extractedProduct,
+          name: `${extractedBrand} ${extractedProduct}`.trim(),
           weight: prod.quantity || "",
           allergens: prod.allergens_from_ingredients ? prod.allergens_from_ingredients.replace(/en:/g, '') : "",
           nutriscore: prod.nutriscore_grade || "",
@@ -561,7 +571,7 @@ export default function App() {
         <div className="container mx-auto max-w-5xl flex justify-between items-center h-[36px]">
           <div className="flex items-center cursor-pointer h-full" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
             <div className="flex items-center">
-              <h5 className="font-bold mb-0 text-[#879e7c] tracking-tight text-[20px] flex items-center">Kusina</h5>
+              <h5 className="font-bold mb-0 text-[#879e7c]] tracking-tight text-[20px] flex items-center">Kusina</h5>
             </div>
           </div>
           
@@ -840,29 +850,33 @@ export default function App() {
                         const hasScore = isValidNutriscore(item.nutriscore);
                         
                         return (
-                          <div key={item.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3 sm:p-4 flex justify-between items-center">
-                            <div className="truncate mr-3 cursor-pointer hover:opacity-70 transition-opacity" onClick={() => setSelectedProductDetails(item)}>
-                              <div className="font-semibold text-[#3e3835] mb-1 truncate flex items-center flex-wrap gap-2 text-[13px]">
+                          <div key={item.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-4">
+                            
+                            {/* Product Details - Stacks gracefully on mobile, inline on desktop */}
+                            <div className="min-w-0 cursor-pointer hover:opacity-75 transition-opacity flex-1" onClick={() => setSelectedProductDetails(item)}>
+                              <div className="flex flex-col gap-1">
                                 {item.brandName && (
-                                  <span className="text-[10px] font-bold text-[#58734b] uppercase tracking-wider bg-[#e5efe2] px-1.5 py-0.5 rounded">
+                                  <span className="text-[9px] sm:text-[10px] font-bold text-[#58734b] uppercase tracking-wider bg-[#e5efe2] px-1.5 py-0.5 rounded w-max">
                                     {item.brandName}
                                   </span>
                                 )}
-                                <span>{item.productName || item.name}</span>
-                                {/* Perfect Circle Nutri-Score Color Tag - Excludes empty/unknown scores */}
-                                {hasScore && (
-                                  <span 
-                                    className="w-[14px] h-[14px] rounded-full inline-flex items-center justify-center text-white font-bold font-mono text-[8px] leading-none shrink-0 align-middle" 
-                                    style={{ backgroundColor: getNutriColor(item.nutriscore) }}
-                                    title={`Nutri-Score ${item.nutriscore.toUpperCase()}`}
-                                  >
-                                    {item.nutriscore.toUpperCase()}
-                                  </span>
-                                )}
+                                <div className="font-semibold text-[#3e3835] text-[13px] sm:text-[14px] flex items-center gap-1.5 flex-wrap">
+                                  <span>{item.productName || item.name}</span>
+                                  {/* Perfect Circle Nutri-Score Color Tag */}
+                                  {hasScore && (
+                                    <span 
+                                      className="w-[14px] h-[14px] rounded-full inline-flex items-center justify-center text-white font-bold font-mono text-[8px] leading-none shrink-0 align-middle" 
+                                      style={{ backgroundColor: getNutriColor(item.nutriscore) }}
+                                      title={`Nutri-Score ${item.nutriscore.toUpperCase()}`}
+                                    >
+                                      {item.nutriscore.toUpperCase()}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                               
-                              {/* Meta Indicators - Spread and Uncrowded */}
-                              <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[10px]">
+                              {/* Meta Indicators */}
+                              <div className="flex flex-wrap items-center gap-1.5 mt-2 text-[10px]">
                                 <span className="bg-white text-gray-500 px-1.5 py-0.5 rounded border border-gray-200 uppercase">{item.weight || 'WEIGHT UNSPECIFIED'}</span>
                                 {renderExpiryDisplay(item.expirationDate)}
                                 {item.allergens && (
@@ -873,20 +887,24 @@ export default function App() {
                               </div>
                             </div>
                             
-                            {/* Actions & Adjusters */}
-                            <div className="flex items-center gap-2 shrink-0">
-                              <div className="flex items-center border border-gray-200 bg-white rounded-full px-1">
-                                <button className="px-1.5 py-0.5 text-gray-500 hover:text-gray-700 text-[12px] font-medium transition-colors" onClick={() => adjustQty(item, -1)}>-</button>
-                                <span className="font-bold px-2 text-[11px] min-w-[20px] text-center">{item.qty}</span>
-                                <button className="px-1.5 py-0.5 text-gray-500 hover:text-gray-700 text-[12px] font-medium transition-colors" onClick={() => adjustQty(item, 1)}>+</button>
+                            {/* Actions & Adjusters - Spans fully & looks balanced on mobile, drops neatly to the right on desktop */}
+                            <div className="flex items-center justify-between sm:justify-end gap-2.5 w-full sm:w-auto border-t border-gray-200/60 pt-3 sm:pt-0 sm:border-0 shrink-0">
+                              <div className="flex items-center border border-gray-200 bg-white rounded-full px-1 py-0.5">
+                                <button className="px-2 py-0.5 text-gray-500 hover:text-gray-700 text-[12px] font-medium transition-colors" onClick={() => adjustQty(item, -1)}>-</button>
+                                <span className="font-bold px-2.5 text-[11px] min-w-[20px] text-center">{item.qty}</span>
+                                <button className="px-2 py-0.5 text-gray-500 hover:text-gray-700 text-[12px] font-medium transition-colors" onClick={() => adjustQty(item, 1)}>+</button>
                               </div>
-                              <button className="bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full w-[28px] h-[28px] inline-flex items-center justify-center transition-colors" onClick={() => setItemForm({ ...item, brandName: item.brandName || "", productName: item.productName || item.name || "", mode: 'edit' })} title="Edit item">
-                                <Edit3 size={11} />
-                              </button>
-                              <button className="bg-gray-100 hover:bg-red-100 text-red-500 rounded-full w-[28px] h-[28px] inline-flex items-center justify-center transition-colors" onClick={() => deleteItem(item.id)} title="Delete item">
-                                <Trash2 size={11} />
-                              </button>
+                              
+                              <div className="flex items-center gap-2">
+                                <button className="bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full w-[30px] h-[30px] inline-flex items-center justify-center transition-colors" onClick={() => setItemForm({ ...item, brandName: item.brandName || "", productName: item.productName || item.name || "", mode: 'edit' })} title="Edit item">
+                                  <Edit3 size={11} />
+                                </button>
+                                <button className="bg-gray-100 hover:bg-red-100 text-red-500 rounded-full w-[30px] h-[30px] inline-flex items-center justify-center transition-colors" onClick={() => deleteItem(item.id)} title="Delete item">
+                                  <Trash2 size={11} />
+                                </button>
+                              </div>
                             </div>
+
                           </div>
                         );
                       })}
