@@ -537,7 +537,7 @@ export default function App() {
         <div className="container mx-auto max-w-5xl flex justify-between items-center h-[36px]">
           <div className="flex items-center cursor-pointer h-full" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
             <div className="mr-2.5 flex items-center justify-center w-[35px] h-[35px] overflow-hidden rounded-md bg-[#f0f0f0]">
-              <img src="public/Kusina.png" alt="Logo" className="w-full h-full object-cover" />
+              <img src="./public/Kusina.png" alt="Logo" className="w-full h-full object-cover" />
             </div>
             <div className="flex items-center">
               <h5 className="font-bold mb-0 text-[#3e3835] tracking-tight text-[20px] flex items-center">Kusina</h5>
