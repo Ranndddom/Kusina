@@ -572,7 +572,7 @@ export default function App() {
                 </div>
                 <div>
                   <h6 className="text-green-600 uppercase font-bold mb-0 tracking-wider text-[10px]">Inbound</h6>
-                  <h5 className="font-bold text-[#3e3835] mb-0 text-[15px]">Scan & Restock</h5>
+                  <h5 className="font-bold text-[#3e3835] mb-0 text-[15px]">Restock</h5>
                 </div>
               </div>
             </div>
@@ -589,7 +589,7 @@ export default function App() {
                 </div>
                 <div>
                   <h6 className="text-[#c58a18] uppercase font-bold mb-0 tracking-wider text-[10px]">Outbound</h6>
-                  <h5 className="font-bold text-[#3e3835] mb-0 text-[15px]">Scan & Deplete</h5>
+                  <h5 className="font-bold text-[#3e3835] mb-0 text-[15px]">Deplete</h5>
                 </div>
               </div>
             </div>
@@ -855,11 +855,12 @@ export default function App() {
         </div>
       </div>
 
-      {/* POPUP TOAST NOTIFICATIONS */}
+      {/* POPUP TOAST NOTIFICATIONS - ADAPTIVE & PROFESSIONAL LAYOUT */}
       {toastMessage && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 px-4 z-50 pointer-events-none">
-          <div className="bg-gray-800 text-white px-5 py-3 rounded-full shadow-lg flex items-center text-[12px] font-medium">
-            <CheckCircle size={14} className="mr-2 text-green-400 shrink-0" /> {toastMessage}
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none w-full max-w-[90%] sm:max-w-md px-4">
+          <div className="bg-slate-900/95 backdrop-blur-sm text-white px-4 py-3 rounded-xl shadow-xl border border-slate-800 flex items-center gap-2.5 text-[12px] font-medium transition-all duration-300">
+            <CheckCircle size={15} className="text-green-400 shrink-0" />
+            <span className="flex-1 leading-snug break-words pr-2">{toastMessage}</span>
           </div>
         </div>
       )}
