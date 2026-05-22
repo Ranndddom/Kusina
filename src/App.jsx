@@ -444,46 +444,6 @@ export default function App() {
     showToast("Product deleted from register.");
   };
 
-  // --- GEMINI AI RECIPE GENERATOR ---
-  const generateRecipe = async () => {
-    setLoadingRecipe(true);
-    setAiRecipe("");
-    setShowRecipeModal(true);
-    
-    const inStock = inventory.filter(i => i.qty > 0).map(i => {
-      const name = i.productName || i.name;
-      const brand = i.brandName ? `${i.brandName} ` : '';
-      return `${brand}${name} (${i.weight || 'unit'})`;
-    }).join(", ");
-    
-    const prompt = `Create an elegant, easy-to-follow recipe utilizing primarily these kitchen items: ${inStock || "none (recommend dynamic basics)"}. Aim for delicious, healthy food, with a bias towards modern Filipino home cooking if matching items. Cleanly break down into: Recipe Title, prep time, ingredients, and step-by-step directions. Output clearly without standard markdown bold symbols or asterisks.`;
-    const apiKey = "AIzaSyAG8lCiJTrSIlQypT6jZ2NubcHFomPJ_38"; 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-    
-    const maxRetries = 5;
-    const delays = [1000, 2000, 4000, 8000, 16000];
-    let success = false, text = "";
-
-    for (let i = 0; i <= maxRetries; i++) {
-      try {
-        const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        const data = await res.json();
-        text = data.candidates?.[0]?.content?.parts?.[0]?.text || "Chef's table is occupied. Try again soon.";
-        success = true; break; 
-      } catch (err) {
-        if (i < maxRetries) await new Promise(resolve => setTimeout(resolve, delays[i]));
-      }
-    }
-
-    if (success) {
-      setAiRecipe(text.replace(/\*\*/g, '').replace(/###/g, '').replace(/##/g, ''));
-    } else {
-      setAiRecipe("Unable to reach Kusina AI. Please ensure you are connected to the internet and try again.");
-    }
-    setLoadingRecipe(false);
-  };
-
   const getDaysUntilExpiry = (dateString) => {
     if (!dateString) return null;
     const today = new Date(); today.setHours(0,0,0,0);
@@ -630,30 +590,6 @@ export default function App() {
         >
           <Database size={16} className="mr-2 text-green-700" />
           <span className="font-bold text-green-700 text-[13px]">Add Item Manually</span>
-        </div>
-
-        {/* AI MEAL PLANNER INTEGRATED STRIP */}
-        <div className="bg-[#fcfbfa] border border-[#f1eeeb] rounded-[18px] p-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-250 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[2px] hover:shadow-[0_8px_24px_rgba(83,69,63,0.05)]">
-          <div className="flex items-center">
-            <div className="bg-[#fff9eb] border border-[#f6ecce] rounded-xl p-2 shadow-sm mr-3 flex items-center justify-center w-[42px] h-[42px]">
-              <Sparkles size={20} className="text-[#d9a029]" />
-            </div>
-            <div>
-              <h6 className="font-bold text-[#3e3835] mb-0 text-[14px]">What's Cooking? AI Assistant</h6>
-              <p className="text-gray-500 mb-0 text-[11px]">Recommend healthy recipes strictly using your registered stock.</p>
-            </div>
-          </div>
-          <button 
-            className="bg-[#879e7c] hover:bg-[#768d6b] text-white rounded-xl px-4 py-2 font-semibold text-sm flex items-center justify-center transition-colors disabled:opacity-75"
-            onClick={generateRecipe}
-            disabled={loadingRecipe}
-          >
-            {loadingRecipe ? (
-              <><RefreshCw size={13} className="mr-2 animate-spin" /> Suggesting...</>
-            ) : (
-              <><Sparkles size={13} className="mr-2" /> Plan Meal</>
-            )}
-          </button>
         </div>
 
         {/* SCANNING OVERLAY ELEMENT */}
