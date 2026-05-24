@@ -677,7 +677,7 @@ export default function App() {
               </h6>
               {outOfStockItems.length === 0 ? (
                 <div className="text-center py-4 border border-dashed border-gray-200 rounded-xl">
-                  <p className="text-gray-500 text-[11px] mb-0">Empty. All kitchen stock is registered.</p>
+                  <p className="text-gray-500 text-[11px] mb-0">Empty.</p>
                 </div>
               ) : (
                 <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-1">
