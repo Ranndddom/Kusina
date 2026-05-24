@@ -468,7 +468,7 @@ export default function App() {
     const days = getDaysUntilExpiry(dateString);
     if (days < 0) return <span className="bg-[#dc2626] text-white font-bold text-[10px] tracking-[0.02em] border border-[#b91c1c] rounded px-1.5 py-0.5 align-middle inline-flex items-center">Expired</span>;
     if (days === 0) return <span className="bg-[#dc2626] text-white font-bold text-[10px] tracking-[0.02em] border border-[#b91c1c] rounded px-1.5 py-0.5 align-middle inline-flex items-center">Expires today</span>;
-    if (days <= 14) return <span className="bg-[#dc2626] text-white font-bold text-[10px] tracking-[0.02em] border border-[#b91c1c] rounded px-1.5 py-0.5 align-middle inline-flex items-center">Expires in {days}d</span>;
+    if (days <= 30) return <span className="bg-[#dc2626] text-white font-bold text-[10px] tracking-[0.02em] border border-[#b91c1c] rounded px-1.5 py-0.5 align-middle inline-flex items-center">Expires in {days}d</span>;
     return <span className="font-medium bg-white px-1.5 py-0.5 rounded border border-gray-200 uppercase inline-flex items-center" style={{ fontSize: '10px', color: '#53453f' }}>EXP: {formatCleanDate(dateString).toUpperCase()}</span>;
   };
 
@@ -511,7 +511,7 @@ export default function App() {
 
   const nearlyExpiredItems = inStockItems.filter(i => {
     const d = getDaysUntilExpiry(i.expirationDate);
-    return d !== null && d <= 14;
+    return d !== null && d <= 30; // 1 month threshold
   }).sort((a, b) => getDaysUntilExpiry(a.expirationDate) - getDaysUntilExpiry(b.expirationDate));
 
   return (
@@ -522,7 +522,6 @@ export default function App() {
         <div className="container mx-auto max-w-5xl flex justify-between items-center h-[36px]">
           <div className="flex items-center cursor-pointer h-full" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
             <div className="flex items-center">
-              {/* Changed color to brand green and font size to 20px, removed logo */}
               <h5 className="font-bold mb-0 text-[#58734b] tracking-tight text-[20px] flex items-center">Kusina</h5>
             </div>
           </div>
@@ -543,14 +542,14 @@ export default function App() {
                   onClick={() => { setShowNavActionDropdown(false); setScannerMode('restock'); setScanning(true); }}
                 >
                   <PlusCircle size={15} className="text-green-600 mr-2" />
-                  Scan & Restock
+                  Restock
                 </button>
                 <button 
                   className="flex items-center w-full p-2 rounded-lg text-sm text-[#3e3835] hover:bg-gray-100 transition-colors text-left"
                   onClick={() => { setShowNavActionDropdown(false); setScannerMode('deplete'); setScanning(true); }}
                 >
                   <ShoppingCart size={15} className="text-[#d9a029] mr-2" />
-                  Scan & Deplete
+                  Deplete
                 </button>
               </div>
             )}
@@ -572,7 +571,7 @@ export default function App() {
                 </div>
                 <div>
                   <h6 className="text-green-600 uppercase font-bold mb-0 tracking-wider text-[10px]">Inbound</h6>
-                  <h5 className="font-bold text-[#3e3835] mb-0 text-[15px]">Scan & Restock</h5>
+                  <h5 className="font-bold text-[#3e3835] mb-0 text-[15px]">Restock</h5>
                 </div>
               </div>
             </div>
@@ -589,7 +588,7 @@ export default function App() {
                 </div>
                 <div>
                   <h6 className="text-[#c58a18] uppercase font-bold mb-0 tracking-wider text-[10px]">Outbound</h6>
-                  <h5 className="font-bold text-[#3e3835] mb-0 text-[15px]">Scan & Deplete</h5>
+                  <h5 className="font-bold text-[#3e3835] mb-0 text-[15px]">Deplete</h5>
                 </div>
               </div>
             </div>
@@ -642,7 +641,7 @@ export default function App() {
               </h6>
               {nearlyExpiredItems.length === 0 ? (
                 <div className="text-center py-4 border border-dashed border-gray-200 rounded-xl">
-                  <p className="text-gray-500 text-[11px] mb-0">No items expiring within 14 days.</p>
+                  <p className="text-gray-500 text-[11px] mb-0">No items expiring within 1 month.</p>
                 </div>
               ) : (
                 <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-1">
@@ -1149,3 +1148,4 @@ export default function App() {
     </div>
   );
 }
+
