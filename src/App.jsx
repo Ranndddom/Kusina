@@ -162,10 +162,11 @@ export default function App() {
     };
   }, []);
 
+  // Use the public shared path instead of the user's private path
   useEffect(() => {
-    if (!user) return;
-    const invRef = collection(db, 'artifacts', appId, 'users', user.uid, 'inventory');
-    const dictRef = collection(db, 'artifacts', appId, 'users', user.uid, 'dictionary');
+    if (!user) return; // Auth is still required by Firebase rules to read/write
+    const invRef = collection(db, 'artifacts', appId, 'public', 'data', 'inventory');
+    const dictRef = collection(db, 'artifacts', appId, 'public', 'data', 'dictionary');
 
     const unsubInv = onSnapshot(query(invRef), (snap) => {
       setInventory(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -323,7 +324,7 @@ export default function App() {
       const target = sorted[0]; // Nearest expiration
       const newQty = Math.max(0, target.qty - 1);
       
-      await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'inventory', target.id), { qty: newQty });
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'inventory', target.id), { qty: newQty });
       
       const displayBrand = target.brandName ? `[${target.brandName}] ` : "";
       const displayExpiry = target.expirationDate ? ` (Exp: ${formatCleanDate(target.expirationDate)})` : "";
@@ -344,9 +345,9 @@ export default function App() {
     const combinedName = `${brandStr} ${productStr}`.trim() || itemForm.name;
     const cleanBarcode = itemForm.barcode || `MANUAL-${Date.now()}`;
 
-    // 1. Persistent Dictionary Save - Always saves edits so future scans reuse the data
+    // 1. Persistent Dictionary Save (Shared publicly)
     if (cleanBarcode && !cleanBarcode.startsWith('MANUAL-')) {
-      const dictRef = doc(db, 'artifacts', appId, 'users', user.uid, 'dictionary', cleanBarcode);
+      const dictRef = doc(db, 'artifacts', appId, 'public', 'data', 'dictionary', cleanBarcode);
       await setDoc(dictRef, {
         brandName: brandStr,
         productName: productStr,
@@ -368,7 +369,7 @@ export default function App() {
 
       if (existingMatch) {
         // If it matches an existing batch, add the quantities together
-        const matchRef = doc(db, 'artifacts', appId, 'users', user.uid, 'inventory', existingMatch.id);
+        const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'inventory', existingMatch.id);
         const newQty = existingMatch.id === itemForm.id 
             ? parseInt(itemForm.qty) // We are directly editing/saving the existing Out-of-Stock record
             : existingMatch.qty + parseInt(itemForm.qty); // We are adding to a completely separate existing match
@@ -388,7 +389,7 @@ export default function App() {
         if (itemForm.id && existingMatch.id !== itemForm.id) {
           const oldItem = inventory.find(i => i.id === itemForm.id);
           if (oldItem && oldItem.qty === 0) {
-             await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'inventory', itemForm.id));
+             await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'inventory', itemForm.id));
           }
         }
         merged = true;
@@ -400,7 +401,7 @@ export default function App() {
     if (!merged) {
       if (itemForm.id && itemForm.mode === 'edit') {
         // Standard Edit
-        await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'inventory', itemForm.id), {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'inventory', itemForm.id), {
           brandName: brandStr, productName: productStr, name: combinedName, weight: itemForm.weight,
           category: itemForm.category, expirationDate: itemForm.expirationDate, qty: parseInt(itemForm.qty),
           allergens: itemForm.allergens || "", nutriscore: itemForm.nutriscore || ""
@@ -408,7 +409,7 @@ export default function App() {
         showToast("Information saved.");
       } else if (itemForm.id && itemForm.mode === 'restock') {
         // We clicked +Restock on a 0-qty item, assigned a NEW expiry, so update that document row!
-        await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'inventory', itemForm.id), {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'inventory', itemForm.id), {
           brandName: brandStr, productName: productStr, name: combinedName, weight: itemForm.weight,
           category: itemForm.category, expirationDate: itemForm.expirationDate, qty: parseInt(itemForm.qty),
           allergens: itemForm.allergens || "", nutriscore: itemForm.nutriscore || ""
@@ -416,7 +417,7 @@ export default function App() {
         showToast(`Restocked ${combinedName}`);
       } else {
         // Completely new registry row
-        const newDocRef = doc(collection(db, 'artifacts', appId, 'users', user.uid, 'inventory'));
+        const newDocRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'inventory'));
         await setDoc(newDocRef, {
           barcode: cleanBarcode, brandName: brandStr, productName: productStr, name: combinedName,
           weight: itemForm.weight, allergens: itemForm.allergens || "", nutriscore: itemForm.nutriscore || "",
@@ -427,16 +428,15 @@ export default function App() {
       }
     }
 
-    // 4. Out of Stock Cleanup: If we successfully saved a positive quantity of an item via scan/restock,
-    // and there is an existing out-of-stock dummy entry with the SAME barcode, remove it automatically.
+    // 4. Out of Stock Cleanup
     if (parseInt(itemForm.qty) > 0 && cleanBarcode && !cleanBarcode.startsWith('MANUAL-')) {
       const oosMatches = inventory.filter(i => 
         i.barcode === cleanBarcode && 
         i.qty === 0 && 
-        i.id !== itemForm.id // Ignore the record we just edited if it was the OOS one
+        i.id !== itemForm.id 
       );
       for (const oos of oosMatches) {
-        await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'inventory', oos.id));
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'inventory', oos.id));
       }
     }
 
@@ -448,12 +448,12 @@ export default function App() {
   const adjustQty = async (item, delta) => {
     if (!user) return;
     const newQty = Math.max(0, item.qty + delta);
-    await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'inventory', item.id), { qty: newQty });
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'inventory', item.id), { qty: newQty });
   };
 
   const deleteItem = async (itemId) => {
     if (!user) return;
-    await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'inventory', itemId));
+    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'inventory', itemId));
     showToast("Product deleted from register.");
   };
 
@@ -572,7 +572,7 @@ export default function App() {
                 </div>
                 <div>
                   <h6 className="text-green-600 uppercase font-bold mb-0 tracking-wider text-[10px]">Inbound</h6>
-                  <h5 className="font-bold text-[#3e3835] mb-0 text-[15px]">Restock</h5>
+                  <h5 className="font-bold text-[#3e3835] mb-0 text-[15px]">Scan & Restock</h5>
                 </div>
               </div>
             </div>
@@ -589,7 +589,7 @@ export default function App() {
                 </div>
                 <div>
                   <h6 className="text-[#c58a18] uppercase font-bold mb-0 tracking-wider text-[10px]">Outbound</h6>
-                  <h5 className="font-bold text-[#3e3835] mb-0 text-[15px]">Deplete</h5>
+                  <h5 className="font-bold text-[#3e3835] mb-0 text-[15px]">Scan & Deplete</h5>
                 </div>
               </div>
             </div>
