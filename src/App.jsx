@@ -162,9 +162,9 @@ export default function App() {
     };
   }, []);
 
-  // Use the public shared path instead of the user's private path
+  // Use the public shared path instead of the user's private path for syncing across home devices
   useEffect(() => {
-    if (!user) return; // Auth is still required by Firebase rules to read/write
+    if (!user) return; 
     const invRef = collection(db, 'artifacts', appId, 'public', 'data', 'inventory');
     const dictRef = collection(db, 'artifacts', appId, 'public', 'data', 'dictionary');
 
@@ -223,10 +223,41 @@ export default function App() {
     setTimeout(() => setToastMessage(""), 3000);
   };
 
+  // --- TIME FORMATTING HANDLERS (Philippine Time - Asia/Manila) ---
   const formatCleanDate = (dateString) => {
     if (!dateString) return "";
-    return new Date(dateString).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    return new Date(dateString).toLocaleDateString('en-PH', { 
+      timeZone: 'Asia/Manila',
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric' 
+    });
   };
+
+  const getDaysUntilExpiry = (dateString) => {
+    if (!dateString) return null;
+    
+    // Get the current date strictly in PH Time
+    const nowInPhStr = new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" });
+    const today = new Date(nowInPhStr);
+    today.setHours(0, 0, 0, 0);
+    
+    // Parse the saved expiration date
+    const expiryDate = new Date(dateString);
+    expiryDate.setHours(0, 0, 0, 0);
+    
+    return Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+  };
+
+  const renderExpiryDisplay = (dateString) => {
+    if (!dateString) return null;
+    const days = getDaysUntilExpiry(dateString);
+    if (days < 0) return <span className="bg-[#dc2626] text-white font-bold text-[10px] tracking-[0.02em] border border-[#b91c1c] rounded px-1.5 py-0.5 align-middle inline-flex items-center">Expired</span>;
+    if (days === 0) return <span className="bg-[#dc2626] text-white font-bold text-[10px] tracking-[0.02em] border border-[#b91c1c] rounded px-1.5 py-0.5 align-middle inline-flex items-center">Expires today</span>;
+    if (days <= 30) return <span className="bg-[#dc2626] text-white font-bold text-[10px] tracking-[0.02em] border border-[#b91c1c] rounded px-1.5 py-0.5 align-middle inline-flex items-center">Expires in {days}d</span>;
+    return <span className="font-medium bg-white px-1.5 py-0.5 rounded border border-gray-200 uppercase inline-flex items-center" style={{ fontSize: '10px', color: '#53453f' }}>EXP: {formatCleanDate(dateString).toUpperCase()}</span>;
+  };
+
 
   // --- API / LOCAL DICTIONARY PRODUCT RESOLVER ---
   // Prioritizes locally saved dictionary edits before falling back to Open Food Facts
@@ -455,21 +486,6 @@ export default function App() {
     if (!user) return;
     await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'inventory', itemId));
     showToast("Product deleted from register.");
-  };
-
-  const getDaysUntilExpiry = (dateString) => {
-    if (!dateString) return null;
-    const today = new Date(); today.setHours(0,0,0,0);
-    return Math.ceil((new Date(dateString) - today) / (1000 * 60 * 60 * 24));
-  };
-
-  const renderExpiryDisplay = (dateString) => {
-    if (!dateString) return null;
-    const days = getDaysUntilExpiry(dateString);
-    if (days < 0) return <span className="bg-[#dc2626] text-white font-bold text-[10px] tracking-[0.02em] border border-[#b91c1c] rounded px-1.5 py-0.5 align-middle inline-flex items-center">Expired</span>;
-    if (days === 0) return <span className="bg-[#dc2626] text-white font-bold text-[10px] tracking-[0.02em] border border-[#b91c1c] rounded px-1.5 py-0.5 align-middle inline-flex items-center">Expires today</span>;
-    if (days <= 30) return <span className="bg-[#dc2626] text-white font-bold text-[10px] tracking-[0.02em] border border-[#b91c1c] rounded px-1.5 py-0.5 align-middle inline-flex items-center">Expires in {days}d</span>;
-    return <span className="font-medium bg-white px-1.5 py-0.5 rounded border border-gray-200 uppercase inline-flex items-center" style={{ fontSize: '10px', color: '#53453f' }}>EXP: {formatCleanDate(dateString).toUpperCase()}</span>;
   };
 
   const getNutriScoreExplanation = (grade) => {
@@ -1148,4 +1164,3 @@ export default function App() {
     </div>
   );
 }
-
